@@ -58,6 +58,7 @@ Welcome to the lobster tank! 🦞
 
 - **Jonathan Taylor** - ACP subsystem, Gateway features/bugs, Gog/Mog/Sog CLI's, SEDMAT
   - Github [@visionik](https://github.com/visionik) · X: [@visionik](https://x.com/visionik)
+
 - **Josh Lehman** - Compaction, Tlon/Urbit subsystem
   - Github [@jalehman](https://github.com/jalehman) · X: [@jlehman\_](https://x.com/jlehman_)
 
@@ -74,6 +75,54 @@ Welcome to the lobster tank! 🦞
 - Ensure CI checks pass
 - Keep PRs focused (one thing per PR; do not mix unrelated concerns)
 - Describe what & why
+
+## Model Provider Contributions
+
+OpenClaw aims to be extensible while keeping the core maintainable. Before opening a PR to add a new model provider, please review this guidance to help save time for both you and reviewers.
+
+**Note:** Final decisions rest with maintainers, but these guidelines reflect what we generally look for.
+
+### When PRs Are Likely to Merge
+
+**Top-tier providers** (straightforward review):
+- Major providers with large user bases and dedicated APIs (Anthropic, OpenAI, Google, Mistral, etc.)
+- Providers explicitly listed in [`VISION.md`](VISION.md) priorities
+- Examples: Anthropic Claude, OpenAI GPT, Google Gemini
+
+**Mid-tier providers** (needs community signal):
+- Providers with dedicated OpenAI-compatible APIs but smaller user bases
+- Must demonstrate demand beyond a single contributor wanting it
+- Evidence can include:
+  - GitHub issue with community votes (typically 12+ supporters)
+  - Discord thread with multiple users requesting it
+  - Regional or use-case necessity (e.g., Mistral for EU compliance)
+
+### When to Use Existing Solutions Instead
+
+If a provider's models are **already accessible** via one of these paths, a dedicated integration is unlikely to merge:
+- **OpenRouter** — aggregates 100+ providers with a single API
+- **vLLM** — custom OpenAI-compatible endpoints
+- **Custom endpoint** — OpenClaw's built-in `custom` provider
+
+**Why?** Every new provider creates perpetual maintenance burden (API changes, auth flows, error handling, docs). If an alternative access path exists, that's the answer.
+
+### Before Opening a PR
+
+1. **Check if it's already accessible:**
+   - Search [OpenRouter's model list](https://openrouter.ai/models)
+   - Test with OpenClaw's `custom` provider if the API is OpenAI-compatible
+2. **Gather community signal:**
+   - Open a [GitHub Discussion](https://github.com/openclaw/openclaw/discussions) or post in [#feature-requests](https://discord.com/channels/1456350064065904867/1459642828266913842) on Discord
+   - Link to the discussion in your PR description
+3. **Show unique value:**
+   - What does this provider offer that OpenRouter/vLLM can't provide?
+   - Is there a regional compliance, pricing, or feature advantage?
+
+### Maintainer Discretion
+
+These are guidelines, not hard rules. Maintainers may approve PRs that don't meet every criterion if there's a compelling reason, or decline PRs that technically qualify if timing or scope isn't right.
+
+**Goal:** Ship what users need, not everything possible.
 
 ## Control UI Decorators
 
