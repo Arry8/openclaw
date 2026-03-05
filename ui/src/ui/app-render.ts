@@ -16,7 +16,7 @@ import type { AppViewState } from "./app-view-state.ts";
 import { loadAgentFileContent, loadAgentFiles, saveAgentFile } from "./controllers/agent-files.ts";
 import { loadAgentIdentities, loadAgentIdentity } from "./controllers/agent-identity.ts";
 import { loadAgentSkills } from "./controllers/agent-skills.ts";
-import { loadAgents } from "./controllers/agents.ts";
+import { loadAgents, loadToolsCatalog } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadChatHistory } from "./controllers/chat.ts";
 import {
@@ -860,11 +860,24 @@ export function renderApp(state: AppViewState) {
                   agentId: state.agentSkillsAgentId,
                   filter: state.skillsFilter,
                 },
+                toolsCatalog: {
+                  loading: state.toolsCatalogLoading,
+                  error: state.toolsCatalogError,
+                  result: state.toolsCatalogResult,
+                },
                 onRefresh: async () => {
                   await loadAgents(state);
                   const agentIds = state.agentsList?.agents?.map((entry) => entry.id) ?? [];
                   if (agentIds.length > 0) {
                     void loadAgentIdentities(state, agentIds);
+                  }
+                  const refreshedAgentId =
+                    state.agentsSelectedId ??
+                    state.agentsList?.defaultId ??
+                    state.agentsList?.agents?.[0]?.id ??
+                    null;
+                  if (state.agentsPanel === "tools" && refreshedAgentId) {
+                    void loadToolsCatalog(state, refreshedAgentId);
                   }
                 },
                 onSelectAgent: (agentId) => {
@@ -881,9 +894,15 @@ export function renderApp(state: AppViewState) {
                   state.agentSkillsReport = null;
                   state.agentSkillsError = null;
                   state.agentSkillsAgentId = null;
+                  state.toolsCatalogResult = null;
+                  state.toolsCatalogError = null;
+                  state.toolsCatalogLoading = false;
                   void loadAgentIdentity(state, agentId);
                   if (state.agentsPanel === "files") {
                     void loadAgentFiles(state, agentId);
+                  }
+                  if (state.agentsPanel === "tools") {
+                    void loadToolsCatalog(state, agentId);
                   }
                   if (state.agentsPanel === "skills") {
                     void loadAgentSkills(state, agentId);
@@ -904,6 +923,14 @@ export function renderApp(state: AppViewState) {
                   if (panel === "skills") {
                     if (resolvedAgentId) {
                       void loadAgentSkills(state, resolvedAgentId);
+                    }
+                  }
+                  if (panel === "tools" && resolvedAgentId) {
+                    if (
+                      state.toolsCatalogResult?.agentId !== resolvedAgentId ||
+                      state.toolsCatalogError
+                    ) {
+                      void loadToolsCatalog(state, resolvedAgentId);
                     }
                   }
                   if (panel === "channels") {

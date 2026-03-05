@@ -81,6 +81,7 @@ import type {
   SkillStatusReport,
   StatusSummary,
   NostrProfile,
+  ToolsCatalogResult,
 } from "./types.ts";
 import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
@@ -267,6 +268,9 @@ export class OpenClawApp extends LitElement {
   @state() agentsList: AgentsListResult | null = null;
   @state() agentsError: string | null = null;
   @state() agentsSelectedId: string | null = null;
+  @state() toolsCatalogLoading = false;
+  @state() toolsCatalogError: string | null = null;
+  @state() toolsCatalogResult: ToolsCatalogResult | null = null;
   @state() agentsPanel: "overview" | "files" | "tools" | "skills" | "channels" | "cron" =
     "overview";
   @state() agentFilesLoading = false;

@@ -4,9 +4,33 @@ import {
   normalizeToolName,
   resolveToolProfilePolicy,
 } from "../../../../src/agents/tool-policy-shared.js";
-import type { AgentIdentityResult, AgentsFilesListResult, AgentsListResult } from "../types.ts";
+import type {
+  AgentIdentityResult,
+  AgentsFilesListResult,
+  AgentsListResult,
+  ToolCatalogProfile,
+  ToolsCatalogResult,
+} from "../types.ts";
 
-export const TOOL_SECTIONS = [
+export type AgentToolEntry = {
+  id: string;
+  label: string;
+  description: string;
+  source?: "core" | "plugin";
+  pluginId?: string;
+  optional?: boolean;
+  defaultProfiles?: string[];
+};
+
+export type AgentToolSection = {
+  id: string;
+  label: string;
+  source?: "core" | "plugin";
+  pluginId?: string;
+  tools: AgentToolEntry[];
+};
+
+export const FALLBACK_TOOL_SECTIONS: AgentToolSection[] = [
   {
     id: "fs",
     label: "Files",
@@ -96,6 +120,38 @@ export const PROFILE_OPTIONS = [
   { id: "messaging", label: "Messaging" },
   { id: "full", label: "Full" },
 ] as const;
+
+export function resolveToolSections(
+  toolsCatalogResult: ToolsCatalogResult | null,
+): AgentToolSection[] {
+  if (toolsCatalogResult?.groups?.length) {
+    return toolsCatalogResult.groups.map((group) => ({
+      id: group.id,
+      label: group.label,
+      source: group.source,
+      pluginId: group.pluginId,
+      tools: group.tools.map((tool) => ({
+        id: tool.id,
+        label: tool.label,
+        description: tool.description,
+        source: tool.source,
+        pluginId: tool.pluginId,
+        optional: tool.optional,
+        defaultProfiles: [...tool.defaultProfiles],
+      })),
+    }));
+  }
+  return FALLBACK_TOOL_SECTIONS;
+}
+
+export function resolveToolProfileOptions(
+  toolsCatalogResult: ToolsCatalogResult | null,
+): readonly ToolCatalogProfile[] | typeof PROFILE_OPTIONS {
+  if (toolsCatalogResult?.profiles?.length) {
+    return toolsCatalogResult.profiles;
+  }
+  return PROFILE_OPTIONS;
+}
 
 type ToolPolicy = {
   allow?: string[];

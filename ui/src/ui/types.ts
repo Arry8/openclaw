@@ -573,6 +573,15 @@ export type ModelCatalogEntry = {
   input?: Array<"text" | "image">;
 };
 
+export type ToolCatalogProfile =
+  import("../../../src/gateway/protocol/schema/types.js").ToolCatalogProfile;
+export type ToolCatalogEntry =
+  import("../../../src/gateway/protocol/schema/types.js").ToolCatalogEntry;
+export type ToolCatalogGroup =
+  import("../../../src/gateway/protocol/schema/types.js").ToolCatalogGroup;
+export type ToolsCatalogResult =
+  import("../../../src/gateway/protocol/schema/types.js").ToolsCatalogResult;
+
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
 export type LogEntry = {
