@@ -596,11 +596,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     if (typeof text !== "string") {
       return text;
     }
-    const cleaned = stripReasoningTagsFromText(text, { mode: "strict", trim: "both" });
-    if (cleaned.startsWith("Reasoning:\n")) {
-      return "";
-    }
-    return cleaned;
+    return stripReasoningTagsFromText(text, { mode: "strict", trim: "both" });
   };
 
   // When draft streaming is active, suppress block streaming to avoid double-streaming.

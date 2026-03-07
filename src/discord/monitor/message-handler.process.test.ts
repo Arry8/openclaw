@@ -545,6 +545,27 @@ describe("processDiscordMessage draft streaming", () => {
     );
   });
 
+  it("does not drop non-reasoning final payloads that start with Reasoning prefix text", async () => {
+    dispatchInboundMessage.mockImplementationOnce(async (params?: DispatchInboundParams) => {
+      await params?.dispatcher.sendFinalReply({
+        text: "Reasoning:\nThis heading is intentional user-facing content",
+      });
+      return { queuedFinal: true, counts: { final: 1, tool: 0, block: 0 } };
+    });
+
+    await processStreamOffDiscordMessage();
+
+    expect(deliverDiscordReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replies: [
+          expect.objectContaining({
+            text: "Reasoning:\nThis heading is intentional user-facing content",
+          }),
+        ],
+      }),
+    );
+  });
+
   it("delivers non-reasoning block payloads to Discord", async () => {
     mockDispatchSingleBlockReply({ text: "hello from block stream" });
     await processStreamOffDiscordMessage();
