@@ -1,7 +1,7 @@
 // Authored by: cc (Claude Code) | 2026-03-13
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CronConfig } from "../config/types.cron.js";
-import { loadHookEntries, runCronHooks } from "./hooks.js";
+import { isValidJobHookPath, loadHookEntries, runCronHooks } from "./hooks.js";
 import type { CronHookContext } from "./hooks.js";
 import type { CronJob } from "./types.js";
 
@@ -28,6 +28,10 @@ const noopLog = {
   warn: vi.fn(),
   error: vi.fn(),
 };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function makeCtx(
   hookPoint: "beforeRun" | "afterComplete" | "onFailure" | "afterRun",
@@ -183,7 +187,81 @@ describe("loadHookEntries", () => {
     const entries = loadHookEntries("beforeRun", config, stubJob(), "cron");
     expect(entries).toEqual([]);
   });
+
+  it("filters by jobName (case-insensitive substring)", () => {
+    const config: CronConfig = {
+      hooks: {
+        beforeRun: [
+          { script: "hooks/daily-only.cjs", filter: { jobName: ["daily"] } },
+          { script: "hooks/all.cjs" },
+        ],
+      },
+    };
+    const job = stubJob({ name: "Daily Backup" });
+    const entries = loadHookEntries("beforeRun", config, job);
+    expect(entries).toHaveLength(2);
+    expect(entries[0].script).toBe("hooks/daily-only.cjs");
+  });
+
+  it("excludes hooks when jobName does not match", () => {
+    const config: CronConfig = {
+      hooks: {
+        beforeRun: [{ script: "hooks/daily-only.cjs", filter: { jobName: ["weekly"] } }],
+      },
+    };
+    const job = stubJob({ name: "Daily Backup" });
+    const entries = loadHookEntries("beforeRun", config, job);
+    expect(entries).toEqual([]);
+  });
+
+  it("rejects per-job hooks with path traversal", () => {
+    const job = stubJob({
+      hooks: {
+        beforeRun: ["../../secrets.env", "../../../etc/passwd", "hooks/valid.cjs"],
+      },
+    });
+    const entries = loadHookEntries("beforeRun", undefined, job);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].script).toBe("hooks/valid.cjs");
+  });
+
+  it("rejects per-job hooks with absolute paths", () => {
+    const job = stubJob({
+      hooks: { beforeRun: ["/etc/passwd", "hooks/safe.cjs"] },
+    });
+    const entries = loadHookEntries("beforeRun", undefined, job);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].script).toBe("hooks/safe.cjs");
+  });
 });
+
+describe("isValidJobHookPath", () => {
+  it("accepts workspace-relative paths", () => {
+    expect(isValidJobHookPath("hooks/audit.cjs")).toBe(true);
+    expect(isValidJobHookPath("workspace/scripts/hooks/alert.cjs")).toBe(true);
+  });
+
+  it("rejects absolute paths", () => {
+    expect(isValidJobHookPath("/etc/passwd")).toBe(false);
+    expect(isValidJobHookPath("/home/user/hook.cjs")).toBe(false);
+  });
+
+  it("rejects path traversal", () => {
+    expect(isValidJobHookPath("../../secrets.env")).toBe(false);
+    expect(isValidJobHookPath("../hook.cjs")).toBe(false);
+    expect(isValidJobHookPath("hooks/../../etc/passwd")).toBe(false);
+  });
+});
+
+/**
+ * Creates a data-URI module that exports the given function body as default.
+ * This avoids filesystem mocking while giving us real dynamic-import hooks.
+ * NOTE: data: URI imports require Node.js — this will not work in Bun or edge runtimes.
+ */
+function inlineHook(body: string): string {
+  const code = `export default ${body}`;
+  return `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
+}
 
 describe("runCronHooks", () => {
   it("returns not-aborted for empty entries", async () => {
@@ -202,5 +280,37 @@ describe("runCronHooks", () => {
     const result = await runCronHooks("afterRun", ctx, entries);
     expect(result).toEqual({ aborted: false });
     expect(noopLog.warn).toHaveBeenCalled();
+  });
+
+  it("aborts when beforeRun hook returns { abort: true, reason }", async () => {
+    const script = inlineHook(
+      `async function(ctx) { return { abort: true, reason: "test abort" }; }`,
+    );
+    const entries = [{ script, priority: 10 }];
+    const result = await runCronHooks("beforeRun", makeCtx("beforeRun"), entries);
+    expect(result.aborted).toBe(true);
+    expect(result.reason).toBe("test abort");
+  });
+
+  it("uses default reason when abort result omits reason", async () => {
+    const script = inlineHook(`async function(ctx) { return { abort: true }; }`);
+    const entries = [{ script, priority: 10 }];
+    const result = await runCronHooks("beforeRun", makeCtx("beforeRun"), entries);
+    expect(result.aborted).toBe(true);
+    expect(result.reason).toBe("aborted by hook");
+  });
+
+  it("does not abort when hook returns { abort: false }", async () => {
+    const script = inlineHook(`async function(ctx) { return { abort: false }; }`);
+    const entries = [{ script, priority: 10 }];
+    const result = await runCronHooks("beforeRun", makeCtx("beforeRun"), entries);
+    expect(result.aborted).toBe(false);
+  });
+
+  it("ignores abort result from non-beforeRun hooks", async () => {
+    const script = inlineHook(`async function(ctx) { return { abort: true, reason: "ignored" }; }`);
+    const entries = [{ script, priority: 10 }];
+    const result = await runCronHooks("afterRun", makeCtx("afterRun"), entries);
+    expect(result.aborted).toBe(false);
   });
 });

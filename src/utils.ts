@@ -271,10 +271,17 @@ export function truncateUtf16Safe(input: string, maxLen: number): string {
   return sliceUtf16Safe(input, 0, limit);
 }
 
+/**
+ * Resolve a user-supplied path: expands `~` to home dir, then makes absolute.
+ * Relative paths resolve against `base` when provided, otherwise `process.cwd()`.
+ * Use `base` for config-derived paths that must resolve against a stable root
+ * (e.g. OC home) rather than the process working directory.
+ */
 export function resolveUserPath(
   input: string,
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
+  base?: string,
 ): string {
   if (!input) {
     return "";
@@ -290,6 +297,9 @@ export function resolveUserPath(
       homedir,
     });
     return path.resolve(expanded);
+  }
+  if (base && !path.isAbsolute(trimmed)) {
+    return path.resolve(base, trimmed);
   }
   return path.resolve(trimmed);
 }

@@ -1,3 +1,5 @@
+// Authored by: cc (Claude Code) | 2026-03-13
+import path from "node:path";
 import { resolveFailoverReasonFromError } from "../../agents/failover-error.js";
 import type { CronConfig, CronRetryOn } from "../../config/types.cron.js";
 import type { HeartbeatRunResult } from "../../infra/heartbeat-wake.js";
@@ -634,6 +636,8 @@ export async function onTimer(state: CronServiceState) {
       const jobTimeoutMs = resolveCronJobTimeoutMs(job);
 
       const hookMeta: Record<string, unknown> = {};
+      // Derive OC home from the cron store path for stable hook script resolution.
+      const hookBasePath = path.resolve(path.dirname(state.deps.storePath), "..");
       const makeHookCtx = (
         hookPoint: "beforeRun" | "afterComplete" | "onFailure" | "afterRun",
         extra?: Partial<CronHookContext>,
@@ -643,6 +647,7 @@ export async function onTimer(state: CronServiceState) {
         job: { id: job.id, name: job.name, agentId: job.agentId, schedule: job.schedule },
         meta: hookMeta,
         log: state.deps.log,
+        basePath: hookBasePath,
         ...extra,
       });
 
@@ -655,12 +660,23 @@ export async function onTimer(state: CronServiceState) {
           beforeEntries,
         );
         if (beforeResult.aborted) {
+          const abortEndedAt = state.deps.nowMs();
+          const abortDurationMs = abortEndedAt - startedAt;
+          // afterRun hooks still fire on abort — they must always run.
+          const afterRunEntries = loadHookEntries("afterRun", state.deps.cronConfig, job);
+          if (afterRunEntries.length > 0) {
+            await runCronHooks(
+              "afterRun",
+              makeHookCtx("afterRun", { status: "skipped", durationMs: abortDurationMs }),
+              afterRunEntries,
+            );
+          }
           return {
             jobId: id,
             status: "skipped",
             error: `hook aborted: ${beforeResult.reason ?? "unknown"}`,
             startedAt,
-            endedAt: state.deps.nowMs(),
+            endedAt: abortEndedAt,
           };
         }
       }
@@ -999,26 +1015,55 @@ async function runStartupCatchupCandidate(
   state: CronServiceState,
   candidate: StartupCatchupCandidate,
 ): Promise<TimedCronRunOutcome> {
+  const { job } = candidate;
   const startedAt = state.deps.nowMs();
-  emit(state, { jobId: candidate.job.id, action: "started", runAtMs: startedAt });
+  emit(state, { jobId: job.id, action: "started", runAtMs: startedAt });
+  const hookMeta: Record<string, unknown> = {};
+  const hookBasePath = path.resolve(path.dirname(state.deps.storePath), "..");
+  const makeHookCtx = (
+    hookPoint: "beforeRun" | "afterComplete" | "onFailure" | "afterRun",
+    extra?: Partial<CronHookContext>,
+  ): CronHookContext => ({
+    hookPoint,
+    workflow: "cron",
+    job: { id: job.id, name: job.name, agentId: job.agentId, schedule: job.schedule },
+    meta: hookMeta,
+    log: state.deps.log,
+    basePath: hookBasePath,
+    ...extra,
+  });
+
+  // beforeRun hooks — may abort the catch-up run.
+  const beforeEntries = loadHookEntries("beforeRun", state.deps.cronConfig, job);
+  if (beforeEntries.length > 0) {
+    const beforeResult = await runCronHooks("beforeRun", makeHookCtx("beforeRun"), beforeEntries);
+    if (beforeResult.aborted) {
+      const abortEndedAt = state.deps.nowMs();
+      const abortDurationMs = abortEndedAt - startedAt;
+      const afterRunEntries = loadHookEntries("afterRun", state.deps.cronConfig, job);
+      if (afterRunEntries.length > 0) {
+        await runCronHooks(
+          "afterRun",
+          makeHookCtx("afterRun", { status: "skipped", durationMs: abortDurationMs }),
+          afterRunEntries,
+        );
+      }
+      return {
+        jobId: candidate.jobId,
+        status: "skipped",
+        error: `hook aborted: ${beforeResult.reason ?? "unknown"}`,
+        startedAt,
+        endedAt: abortEndedAt,
+      };
+    }
+  }
+
+  let coreResult: TimedCronRunOutcome;
   try {
-    const result = await executeJobCoreWithTimeout(state, candidate.job);
-    return {
-      jobId: candidate.jobId,
-      status: result.status,
-      error: result.error,
-      summary: result.summary,
-      delivered: result.delivered,
-      sessionId: result.sessionId,
-      sessionKey: result.sessionKey,
-      model: result.model,
-      provider: result.provider,
-      usage: result.usage,
-      startedAt,
-      endedAt: state.deps.nowMs(),
-    };
+    const result = await executeJobCoreWithTimeout(state, job);
+    coreResult = { jobId: candidate.jobId, ...result, startedAt, endedAt: state.deps.nowMs() };
   } catch (err) {
-    return {
+    coreResult = {
       jobId: candidate.jobId,
       status: "error",
       error: String(err),
@@ -1026,6 +1071,36 @@ async function runStartupCatchupCandidate(
       endedAt: state.deps.nowMs(),
     };
   }
+
+  const durationMs = coreResult.endedAt - coreResult.startedAt;
+  if (coreResult.status === "ok") {
+    const entries = loadHookEntries("afterComplete", state.deps.cronConfig, job);
+    if (entries.length > 0) {
+      await runCronHooks(
+        "afterComplete",
+        makeHookCtx("afterComplete", { status: "ok", durationMs }),
+        entries,
+      );
+    }
+  } else if (coreResult.status === "error") {
+    const entries = loadHookEntries("onFailure", state.deps.cronConfig, job);
+    if (entries.length > 0) {
+      await runCronHooks(
+        "onFailure",
+        makeHookCtx("onFailure", { error: coreResult.error, status: "error", durationMs }),
+        entries,
+      );
+    }
+  }
+  const afterRunEntries = loadHookEntries("afterRun", state.deps.cronConfig, job);
+  if (afterRunEntries.length > 0) {
+    await runCronHooks(
+      "afterRun",
+      makeHookCtx("afterRun", { status: coreResult.status, error: coreResult.error, durationMs }),
+      afterRunEntries,
+    );
+  }
+  return coreResult;
 }
 
 async function applyStartupCatchupOutcomes(
