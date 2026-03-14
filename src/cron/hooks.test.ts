@@ -251,6 +251,13 @@ describe("isValidJobHookPath", () => {
     expect(isValidJobHookPath("../hook.cjs")).toBe(false);
     expect(isValidJobHookPath("hooks/../../etc/passwd")).toBe(false);
   });
+
+  it("rejects URL-scheme specifiers", () => {
+    expect(isValidJobHookPath("npm:some-package")).toBe(false);
+    expect(isValidJobHookPath("node:fs")).toBe(false);
+    expect(isValidJobHookPath("https://example.com/hook.js")).toBe(false);
+    expect(isValidJobHookPath("data:text/javascript,export default()=>{}")).toBe(false);
+  });
 });
 
 /**

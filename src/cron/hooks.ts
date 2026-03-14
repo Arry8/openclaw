@@ -201,6 +201,12 @@ export function isValidJobHookPath(scriptPath: string): boolean {
   if (path.isAbsolute(scriptPath)) {
     return false;
   }
+  // Reject URL-scheme specifiers (npm:, node:, data:, https:, etc.) — per-job
+  // hooks must be relative filesystem paths. Global hooks in openclaw.json are
+  // admin-controlled and may use any specifier.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(scriptPath)) {
+    return false;
+  }
   const normalized = path.normalize(scriptPath);
   if (normalized.startsWith("..")) {
     return false;

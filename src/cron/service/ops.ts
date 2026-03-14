@@ -520,6 +520,16 @@ async function finishPreparedManualRun(
         recomputeNextRunsForMaintenance(state, { recomputeExpired: true });
         await persist(state);
         armTimer(state);
+        // Emit finished so gateway/UI listeners see the run as complete.
+        emit(state, {
+          jobId,
+          action: "finished",
+          status: "skipped",
+          error: `hook aborted: ${beforeResult.reason ?? "unknown"}`,
+          runAtMs: startedAt,
+          durationMs: abortEndedAt - startedAt,
+          nextRunAtMs: job?.state.nextRunAtMs,
+        });
       });
       return;
     }
