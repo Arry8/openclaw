@@ -1,13 +1,11 @@
 // Authored by: cc (Claude Code) | 2026-03-13
-import path from "node:path";
 import type { CronConfig, CronHookEntry, CronLifecycleHookPoint } from "../config/types.cron.js";
-import { importFileModule, resolveFunctionModuleExport } from "../hooks/module-loader.js";
-import { resolveUserPath } from "../utils.js";
+import type { LifecycleHookRunResult } from "../config/types.hooks.js";
+import { isValidJobHookPath, loadHookModule, runLifecycleHooks } from "../hooks/lifecycle.js";
 import type { Logger } from "./service/state.js";
 import type { CronJob } from "./types.js";
 
 const DEFAULT_PRIORITY = 10;
-const HOOK_TIMEOUT_MS = 10_000;
 
 export type CronHookContext = {
   hookPoint: CronLifecycleHookPoint;
@@ -26,10 +24,8 @@ export type CronHookContext = {
   basePath?: string;
 };
 
-export type CronHookRunResult = {
-  aborted: boolean;
-  reason?: string;
-};
+// Back-compat alias: keeps existing callers working without re-exporting the shared type directly.
+export type CronHookRunResult = LifecycleHookRunResult;
 
 /** Resolved entry with a guaranteed numeric priority for sorting. */
 type ResolvedEntry = CronHookEntry & { priority: number };
@@ -81,75 +77,18 @@ export function loadHookEntries(
 
 /**
  * Execute hook scripts sequentially for a given lifecycle point.
- * Hook failures are logged but never crash the caller.
- * Only `beforeRun` hooks may abort the job via `{ abort: true, reason }`.
+ * Back-compat wrapper around runLifecycleHooks — only `beforeRun` hooks may abort.
  */
 export async function runCronHooks(
   hookPoint: CronLifecycleHookPoint,
   ctx: CronHookContext,
   entries: ResolvedEntry[],
 ): Promise<CronHookRunResult> {
-  if (entries.length === 0) {
-    return { aborted: false };
-  }
-
-  for (const entry of entries) {
-    try {
-      const hookFn = await loadHookModule(entry.script, ctx.basePath);
-      if (typeof hookFn !== "function") {
-        ctx.log.warn(
-          { hookPoint, script: entry.script },
-          "cron hook: module does not export a function, skipping",
-        );
-        continue;
-      }
-
-      const timeoutMs = entry.timeoutMs ?? HOOK_TIMEOUT_MS;
-      const timeout = createTimeout(timeoutMs);
-      let result: unknown;
-      try {
-        result = await Promise.race([hookFn(ctx), timeout.promise]);
-      } finally {
-        timeout.clear();
-      }
-
-      // Only beforeRun hooks can abort execution.
-      if (hookPoint === "beforeRun" && isAbortResult(result)) {
-        const reason =
-          "reason" in result && typeof result.reason === "string"
-            ? result.reason
-            : "aborted by hook";
-        ctx.log.info(
-          { hookPoint, script: entry.script, reason },
-          "cron hook: job aborted by beforeRun hook",
-        );
-        return { aborted: true, reason };
-      }
-    } catch (err) {
-      // Use error level for runtime failures; warn for missing modules.
-      const isModuleError =
-        err instanceof Error &&
-        (err.message.includes("Cannot find module") || err.message.includes("MODULE_NOT_FOUND"));
-      const logFn = isModuleError ? ctx.log.warn : ctx.log.error;
-      logFn.call(
-        ctx.log,
-        { hookPoint, script: entry.script, err: String(err) },
-        "cron hook: script failed, continuing",
-      );
-    }
-  }
-
-  return { aborted: false };
+  return runLifecycleHooks(hookPoint, ctx, entries, ["beforeRun"]);
 }
 
-function isAbortResult(value: unknown): value is { abort: boolean; reason?: string } {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    "abort" in value &&
-    Boolean((value as { abort: unknown }).abort)
-  );
-}
+// Re-export shared utilities so callers that imported from this module continue to work.
+export { isValidJobHookPath, loadHookModule };
 
 function matchesFilter(entry: CronHookEntry, job: CronJob, workflow: string): boolean {
   const f = entry.filter;
@@ -174,44 +113,4 @@ function matchesFilter(entry: CronHookEntry, job: CronJob, workflow: string): bo
     return false;
   }
   return true;
-}
-
-async function loadHookModule(scriptPath: string, basePath?: string): Promise<unknown> {
-  // Check isAbsolute before the URL-scheme regex: Windows drive-letter paths like
-  // "C:\hooks\audit.cjs" match /^[a-z][a-z0-9+.-]*:/ and must not be treated as URLs.
-  if (!path.isAbsolute(scriptPath) && /^[a-z][a-z0-9+.-]*:/i.test(scriptPath)) {
-    // URL-scheme specifiers (file://, data:, etc.) are passed through directly.
-    const mod = (await import(scriptPath)) as Record<string, unknown>;
-    return mod.default ?? mod;
-  }
-  // Resolve via resolveUserPath: handles ~ expansion and resolves relative paths
-  // against the provided base (OC home) instead of process.cwd().
-  const resolved = resolveUserPath(scriptPath, process.env, undefined, basePath);
-  const mod = await importFileModule({ modulePath: resolved, cacheBust: true });
-  return resolveFunctionModuleExport({ mod, fallbackExportNames: ["default"] });
-}
-
-/**
- * Validate that a per-job hook script path does not escape the base directory
- * via path traversal (e.g. "../../secrets.env"). Global hooks from openclaw.json
- * are admin-controlled and not subject to this restriction.
- */
-export function isValidJobHookPath(scriptPath: string): boolean {
-  // Reject absolute paths and traversal segments in per-job entries.
-  if (path.isAbsolute(scriptPath)) {
-    return false;
-  }
-  const normalized = path.normalize(scriptPath);
-  if (normalized.startsWith("..")) {
-    return false;
-  }
-  return true;
-}
-
-function createTimeout(ms: number): { promise: Promise<never>; clear: () => void } {
-  let id: ReturnType<typeof setTimeout>;
-  const promise = new Promise<never>((_, reject) => {
-    id = setTimeout(() => reject(new Error(`cron hook timed out after ${ms}ms`)), ms);
-  });
-  return { promise, clear: () => clearTimeout(id) };
 }

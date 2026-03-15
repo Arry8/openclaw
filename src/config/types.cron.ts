@@ -1,3 +1,4 @@
+import type { LifecycleHookEntry } from "./types.hooks.js";
 import type { SecretInput } from "./types.secrets.js";
 
 /** Error types that can trigger retries for one-shot jobs. */
@@ -27,14 +28,8 @@ export type CronFailureDestinationConfig = {
   mode?: "announce" | "webhook";
 };
 
-/** A script to run at a cron lifecycle hook point. */
-export type CronHookEntry = {
-  /** Path to hook script (.cjs/.ts), workspace-relative or absolute. */
-  script: string;
-  /** Execution priority — lower numbers run first (default: 10). */
-  priority?: number;
-  /** Per-hook timeout in milliseconds (default: 10000). */
-  timeoutMs?: number;
+/** A script to run at a cron lifecycle hook point. Extends the shared LifecycleHookEntry with cron-specific filter criteria. */
+export type CronHookEntry = LifecycleHookEntry & {
   /** Only run this hook when the filter criteria match. */
   filter?: {
     workflow?: string[];
