@@ -110,6 +110,17 @@ describe("execCronScript", () => {
     expect(result.error).toContain("aborted");
   });
 
+  it("runs .sh script without executable bit via sh interpreter", async () => {
+    const scriptPath = path.join(tmpDir, "no-x.sh");
+    fs.writeFileSync(scriptPath, "#!/bin/sh\necho hello-no-x", { mode: 0o644 });
+    const result = await execCronScript({
+      payload: { kind: "script", command: scriptPath },
+      basePath: tmpDir,
+    });
+    expect(result.status).toBe("ok");
+    expect(result.summary).toBe("hello-no-x");
+  });
+
   it("uses cwd when provided", async () => {
     const script = writeScript("pwd.sh", "#!/bin/sh\npwd");
     const result = await execCronScript({

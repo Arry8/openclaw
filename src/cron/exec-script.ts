@@ -44,6 +44,12 @@ export async function execCronScript(params: ExecCronScriptParams): Promise<Cron
   }
   const childEnv = payload.env ? { ...process.env, ...payload.env } : process.env;
 
+  // Detect interpreter from extension so scripts don't require chmod +x.
+  // When no interpreter is found the file is executed directly (still needs +x).
+  const interpreter = resolveScriptInterpreter(resolvedCommand);
+  const execCmd = interpreter ?? resolvedCommand;
+  const execArgs = interpreter ? [resolvedCommand, ...(payload.args ?? [])] : (payload.args ?? []);
+
   return new Promise<CronRunOutcome>((resolve) => {
     let settled = false;
     let aborted = false;
@@ -56,8 +62,8 @@ export async function execCronScript(params: ExecCronScriptParams): Promise<Cron
     };
 
     const child = execFile(
-      resolvedCommand,
-      payload.args ?? [],
+      execCmd,
+      execArgs,
       { env: childEnv, cwd: resolvedCwd, maxBuffer: 10 * 1024 * 1024 },
       (err, stdout, stderr) => {
         if (aborted) {
@@ -105,6 +111,39 @@ export async function execCronScript(params: ExecCronScriptParams): Promise<Cron
       }
     }
   });
+}
+
+/**
+ * Map a script file extension to an interpreter binary so scripts don't need
+ * the executable bit set. Returns null for unknown extensions — caller falls
+ * back to direct execution (which still requires chmod +x).
+ *
+ * Mapping is intentionally conservative: only unambiguous, widely-available
+ * runtimes are covered. New entries should only be added when there is a single
+ * obvious choice for the extension.
+ */
+function resolveScriptInterpreter(scriptPath: string): string | null {
+  const ext = path.extname(scriptPath).toLowerCase();
+  switch (ext) {
+    case ".sh":
+    case ".bash":
+    case ".zsh":
+      return "sh";
+    case ".js":
+    case ".cjs":
+    case ".mjs":
+      return "node";
+    case ".ts":
+      // Prefer bun for TypeScript; falls back to node+tsx if bun is unavailable,
+      // but we let the caller surface that as a spawn error rather than probing.
+      return "bun";
+    case ".py":
+      return "python3";
+    case ".rb":
+      return "ruby";
+    default:
+      return null;
+  }
 }
 
 /**
