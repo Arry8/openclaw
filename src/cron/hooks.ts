@@ -186,9 +186,11 @@ async function loadHookModule(scriptPath: string, basePath?: string): Promise<un
     const mod = (await import(scriptPath)) as Record<string, unknown>;
     return mod.default ?? mod;
   }
-  // Resolve via resolveUserPath: handles ~ expansion and resolves relative paths
-  // against the provided base (OC home) instead of process.cwd().
-  const resolved = resolveUserPath(scriptPath, process.env, undefined, basePath);
+  // Expand ~ then resolve relative paths against basePath (OC home) instead of process.cwd().
+  const expanded = resolveUserPath(scriptPath, process.env);
+  const resolved = path.isAbsolute(expanded)
+    ? expanded
+    : path.resolve(basePath ?? process.cwd(), expanded);
   const mod = await importFileModule({ modulePath: resolved, cacheBust: true });
   return resolveFunctionModuleExport({ mod, fallbackExportNames: ["default"] });
 }

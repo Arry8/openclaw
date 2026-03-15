@@ -141,6 +141,23 @@
         "src/utils.js"
       ]
     },
+    "src/cron/hooks.ts": {
+      "purpose": "",
+      "exports": [
+        "CronHookContext",
+        "CronHookRunResult",
+        "isValidJobHookPath",
+        "loadHookEntries",
+        "runCronHooks"
+      ],
+      "dependencies": [
+        "src/config/types.cron.js",
+        "src/cron/service/state.js",
+        "src/cron/types.js",
+        "src/hooks/module-loader.js",
+        "src/utils.js"
+      ]
+    },
     "src/cron/service/jobs.ts": {
       "purpose": "",
       "exports": [
@@ -167,6 +184,36 @@
         "src/cron/types.js",
         "src/cron/webhook-url.js",
         "src/routing/session-key.js"
+      ]
+    },
+    "src/cron/service/ops.ts": {
+      "purpose": "",
+      "exports": [
+        "add",
+        "CronListPageOptions",
+        "CronListPageResult",
+        "enqueueRun",
+        "list",
+        "listPage",
+        "remove",
+        "run",
+        "start",
+        "status",
+        "stop",
+        "update",
+        "wakeNow"
+      ],
+      "dependencies": [
+        "src/cron/hooks.js",
+        "src/cron/service/initial-delivery.js",
+        "src/cron/service/jobs.js",
+        "src/cron/service/locked.js",
+        "src/cron/service/state.js",
+        "src/cron/service/store.js",
+        "src/cron/service/timer.js",
+        "src/cron/types.js",
+        "src/process/command-queue.js",
+        "src/process/lanes.js"
       ]
     },
     "src/cron/service/timer.ts": {

@@ -263,11 +263,15 @@ export function registerCronAddCommand(cron: Command) {
             throw new Error("Choose --delete-after-run or --keep-after-run, not both");
           }
 
-          if (sessionTarget === "main" && payload.kind === "agentTurn") {
-            throw new Error("Main jobs require --system-event (systemEvent).");
+          if (sessionTarget === "main" && payload.kind !== "systemEvent") {
+            throw new Error(
+              "--session main requires --system-event; --message and --script are not allowed for main sessions.",
+            );
           }
           if (isIsolatedLikeSessionTarget && payload.kind === "systemEvent") {
-            throw new Error("Main session jobs require --system-event.");
+            throw new Error(
+              "--system-event is not allowed for isolated/current/session targets; use --message or --script instead.",
+            );
           }
           if (
             (opts.announce || typeof opts.deliver === "boolean") &&
