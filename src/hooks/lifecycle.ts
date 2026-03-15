@@ -1,6 +1,7 @@
 // Authored by: cc (Claude Code) | 2026-03-15
 import path from "node:path";
 import type { LifecycleHookEntry, LifecycleHookRunResult } from "../config/types.hooks.js";
+export type { LifecycleHookRunResult } from "../config/types.hooks.js";
 import { resolveUserPath } from "../utils.js";
 import { importFileModule, resolveFunctionModuleExport } from "./module-loader.js";
 
