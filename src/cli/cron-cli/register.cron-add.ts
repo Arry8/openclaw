@@ -191,16 +191,21 @@ export function registerCronAddCommand(cron: Command) {
               const scriptEnvEntries = Array.isArray(opts.scriptEnv)
                 ? (opts.scriptEnv as string[])
                 : [];
-              // Parse KEY=VALUE pairs into an object; skip malformed entries.
+              // Parse KEY=VALUE pairs; throw on malformed entries so the user
+              // isn't surprised by silently missing env vars.
+              const malformed = scriptEnvEntries.filter((e) => e.indexOf("=") <= 0);
+              if (malformed.length > 0) {
+                throw new Error(
+                  `Malformed --script-env entries (expected KEY=VALUE): ${malformed.join(", ")}`,
+                );
+              }
               const scriptEnv =
                 scriptEnvEntries.length > 0
                   ? Object.fromEntries(
-                      scriptEnvEntries
-                        .map((e) => {
-                          const idx = e.indexOf("=");
-                          return idx > 0 ? [e.slice(0, idx), e.slice(idx + 1)] : null;
-                        })
-                        .filter((e): e is [string, string] => e !== null),
+                      scriptEnvEntries.map((e) => {
+                        const idx = e.indexOf("=");
+                        return [e.slice(0, idx), e.slice(idx + 1)] as [string, string];
+                      }),
                     )
                   : undefined;
               const scriptCwd =
@@ -304,6 +309,20 @@ export function registerCronAddCommand(cron: Command) {
                     ? "none"
                     : undefined
                 : undefined;
+
+          // When no delivery mode is active, delivery-targeting flags have nowhere to go.
+          if (!deliveryMode) {
+            const hasExplicitDeliveryFlags =
+              (typeof opts.to === "string" && opts.to.trim().length > 0) ||
+              Boolean(accountId) ||
+              opts.bestEffortDeliver === true ||
+              optionSource("channel") === "cli";
+            if (hasExplicitDeliveryFlags) {
+              throw new Error(
+                "Delivery flags (--to, --channel, --account, --best-effort-deliver) require --announce. Add --announce to enable delivery.",
+              );
+            }
+          }
 
           const nameRaw = typeof opts.name === "string" ? opts.name : "";
           const name = nameRaw.trim();

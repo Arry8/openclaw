@@ -478,7 +478,7 @@ async function finishPreparedManualRun(
       agentId: executionJob.agentId,
       schedule: executionJob.schedule,
     },
-    payload: executionJob.payload,
+    payload: structuredClone(executionJob.payload),
     meta: hookMeta,
     log: state.deps.log,
     basePath: hookBasePath,
