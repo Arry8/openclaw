@@ -5,6 +5,7 @@ import type { CronConfig, CronRetryOn } from "../../config/types.cron.js";
 import type { HeartbeatRunResult } from "../../infra/heartbeat-wake.js";
 import { DEFAULT_AGENT_ID } from "../../routing/session-key.js";
 import { resolveCronDeliveryPlan } from "../delivery.js";
+import { execCronScript } from "../exec-script.js";
 import { loadHookEntries, runCronHooks } from "../hooks.js";
 import type { CronHookContext } from "../hooks.js";
 import { sweepCronRunSessions } from "../session-reaper.js";
@@ -1187,6 +1188,13 @@ export async function executeJobCore(
   if (abortSignal?.aborted) {
     return resolveAbortError();
   }
+
+  // Script payloads execute directly — no session or LLM turn needed.
+  if (job.payload.kind === "script") {
+    const basePath = path.resolve(path.dirname(state.deps.storePath), "..");
+    return execCronScript({ payload: job.payload, basePath, abortSignal });
+  }
+
   if (job.sessionTarget === "main") {
     const text = resolveJobPayloadTextForMain(job);
     if (!text) {

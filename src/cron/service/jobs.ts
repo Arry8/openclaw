@@ -669,7 +669,7 @@ function mergeCronPayload(existing: CronPayload, patch: CronPayloadPatch): CronP
     return { kind: "systemEvent", text };
   }
 
-  if (existing.kind !== "agentTurn") {
+  if (existing.kind !== "agentTurn" || patch.kind !== "agentTurn") {
     return buildPayloadFromPatch(patch);
   }
 
@@ -754,6 +754,25 @@ function buildPayloadFromPatch(patch: CronPayloadPatch): CronPayload {
       throw new Error('cron.update payload.kind="systemEvent" requires text');
     }
     return { kind: "systemEvent", text: patch.text };
+  }
+
+  if (patch.kind === "script") {
+    if (typeof patch.command !== "string" || patch.command.length === 0) {
+      throw new Error('cron.update payload.kind="script" requires command');
+    }
+    return {
+      kind: "script",
+      command: patch.command,
+      args: patch.args,
+      env: patch.env,
+      cwd: patch.cwd,
+      timeoutSeconds: patch.timeoutSeconds,
+      deliver: patch.deliver,
+    };
+  }
+
+  if (patch.kind !== "agentTurn") {
+    throw new Error(`cron.update unsupported payload.kind: ${String(patch.kind)}`);
   }
 
   if (typeof patch.message !== "string" || patch.message.length === 0) {
