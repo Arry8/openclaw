@@ -1,3 +1,23 @@
+// Authored by: cc (Claude Code) | 2026-03-15
+
+/**
+ * Generic lifecycle hook entry — shared foundation for cron, delivery, agent, and tool hooks.
+ * Domain-specific hook types (e.g. CronHookEntry) extend this with their own filter fields.
+ */
+export type LifecycleHookEntry = {
+  /** Path to hook script (.cjs/.ts), workspace-relative or absolute. */
+  script: string;
+  /** Execution priority — lower numbers run first (default: 10). */
+  priority?: number;
+  /** Per-hook timeout in milliseconds (default: 10000). */
+  timeoutMs?: number;
+};
+
+export type LifecycleHookRunResult = {
+  aborted: boolean;
+  reason?: string;
+};
+
 export type HookMappingMatch = {
   path?: string;
   source?: string;
