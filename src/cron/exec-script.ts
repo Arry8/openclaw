@@ -40,8 +40,11 @@ export async function execCronScript(params: ExecCronScriptParams): Promise<Cron
 
   return new Promise<CronRunOutcome>((resolve) => {
     let settled = false;
+    let aborted = false;
     const settle = (result: CronRunOutcome) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       settled = true;
       resolve(result);
     };
@@ -51,7 +54,10 @@ export async function execCronScript(params: ExecCronScriptParams): Promise<Cron
       payload.args ?? [],
       { env: childEnv, cwd: resolvedCwd, maxBuffer: 10 * 1024 * 1024 },
       (err, stdout, stderr) => {
-        if (err) {
+        if (aborted) {
+          // Aborted via signal — report the abort reason regardless of the signal error.
+          settle({ status: "error", error: "script execution aborted (timeout)" });
+        } else if (err) {
           // Non-zero exit or spawn error — capture stderr as the error message.
           const errText = stderr?.trim() || err.message;
           settle({ status: "error", error: errText, summary: stdout?.trim() || undefined });
@@ -63,14 +69,25 @@ export async function execCronScript(params: ExecCronScriptParams): Promise<Cron
 
     if (abortSignal) {
       const onAbort = () => {
-        if (!settled) {
-          try {
-            child.kill("SIGTERM");
-          } catch {
-            // process may have already exited
-          }
-          settle({ status: "error", error: "script execution aborted (timeout)" });
+        if (settled) {
+          return;
         }
+        aborted = true;
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          // process may have already exited
+        }
+        // Escalate to SIGKILL after 5s if SIGTERM doesn't terminate the process.
+        const killTimer = setTimeout(() => {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            // already gone
+          }
+        }, 5_000);
+        // Clear the timer once the process exits; execFile callback will settle.
+        child.once("close", () => clearTimeout(killTimer));
       };
       if (abortSignal.aborted) {
         onAbort();

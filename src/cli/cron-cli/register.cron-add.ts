@@ -181,9 +181,7 @@ export function registerCronAddCommand(cron: Command) {
               Boolean,
             ).length;
             if (chosen !== 1) {
-              throw new Error(
-                "Choose exactly one payload: --system-event, --message, or --script",
-              );
+              throw new Error("Choose exactly one payload: --system-event, --message, or --script");
             }
             if (systemEvent) {
               return { kind: "systemEvent" as const, text: systemEvent };
@@ -287,6 +285,7 @@ export function registerCronAddCommand(cron: Command) {
             throw new Error("--account requires a --message or --script job with delivery.");
           }
 
+          // agentTurn defaults to "announce"; script delivery is opt-in (requires --announce).
           const deliveryMode =
             payload.kind === "agentTurn" && isIsolatedLikeSessionTarget
               ? hasAnnounce
@@ -294,7 +293,13 @@ export function registerCronAddCommand(cron: Command) {
                 : hasNoDeliver
                   ? "none"
                   : "announce"
-              : undefined;
+              : payload.kind === "script" && isIsolatedLikeSessionTarget
+                ? hasAnnounce
+                  ? "announce"
+                  : hasNoDeliver
+                    ? "none"
+                    : undefined
+                : undefined;
 
           const nameRaw = typeof opts.name === "string" ? opts.name : "";
           const name = nameRaw.trim();
