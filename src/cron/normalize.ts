@@ -92,8 +92,22 @@ function coercePayload(payload: UnknownRecord) {
   } else if (kindRaw === "systemevent") {
     next.kind = "systemEvent";
   } else if (kindRaw === "script") {
-    // script payloads pass through normalization unchanged
     next.kind = "script";
+    // Trim command and cwd — consistent with how message/text/model are trimmed above.
+    if (typeof next.command === "string") {
+      const trimmed = next.command.trim();
+      if (trimmed) {
+        next.command = trimmed;
+      }
+    }
+    if (typeof next.cwd === "string") {
+      const trimmed = next.cwd.trim();
+      if (trimmed) {
+        next.cwd = trimmed;
+      } else {
+        delete next.cwd;
+      }
+    }
   } else if (kindRaw) {
     next.kind = kindRaw;
   }

@@ -158,6 +158,24 @@
         "src/utils.js"
       ]
     },
+    "src/cron/normalize.ts": {
+      "purpose": "",
+      "exports": [
+        "normalizeCronJobCreate",
+        "normalizeCronJobInput",
+        "normalizeCronJobPatch"
+      ],
+      "dependencies": [
+        "src/cron/legacy-delivery.js",
+        "src/cron/parse.js",
+        "src/cron/payload-migration.js",
+        "src/cron/service/normalize.js",
+        "src/cron/stagger.js",
+        "src/cron/types.js",
+        "src/routing/session-key.js",
+        "src/utils.js"
+      ]
+    },
     "src/cron/service/jobs.ts": {
       "purpose": "",
       "exports": [
