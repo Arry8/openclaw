@@ -646,6 +646,7 @@ export async function onTimer(state: CronServiceState) {
         hookPoint,
         workflow: "cron",
         job: { id: job.id, name: job.name, agentId: job.agentId, schedule: job.schedule },
+        payload: job.payload,
         meta: hookMeta,
         log: state.deps.log,
         basePath: hookBasePath,
