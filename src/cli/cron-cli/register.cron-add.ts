@@ -310,8 +310,8 @@ export function registerCronAddCommand(cron: Command) {
                     : undefined
                 : undefined;
 
-          // When no delivery mode is active, delivery-targeting flags have nowhere to go.
-          if (!deliveryMode) {
+          // Delivery-targeting flags only make sense when announce mode is active.
+          if (deliveryMode !== "announce") {
             const hasExplicitDeliveryFlags =
               (typeof opts.to === "string" && opts.to.trim().length > 0) ||
               Boolean(accountId) ||
