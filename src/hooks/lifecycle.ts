@@ -73,7 +73,7 @@ export async function runLifecycleHooks(
       const logFn = isModuleError ? ctx.log.warn : ctx.log.error;
       logFn.call(
         ctx.log,
-        { hookPoint, script: entry.script, err: String(err) },
+        { hookPoint, script: entry.script, err: err instanceof Error ? err : String(err) },
         "lifecycle hook: script failed, continuing",
       );
     }
