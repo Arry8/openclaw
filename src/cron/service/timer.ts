@@ -1192,6 +1192,9 @@ export async function executeJobCore(
   }
 
   // Script payloads execute directly — no session or LLM turn needed.
+  // TODO: delivery (announce to channel) for script jobs requires a dedicated
+  // CronServiceDeps function not yet wired. Tracked as a follow-up; for now
+  // delivered/deliveryAttempted are left unset in the returned result.
   if (job.payload.kind === "script") {
     const basePath = path.resolve(path.dirname(state.deps.storePath), "..");
     return execCronScript({ payload: job.payload, basePath, abortSignal });
