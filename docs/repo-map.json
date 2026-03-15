@@ -293,6 +293,39 @@
         "src/routing/session-key.js"
       ]
     },
+    "src/cron/types.ts": {
+      "purpose": "",
+      "exports": [
+        "CronDelivery",
+        "CronDeliveryMode",
+        "CronDeliveryPatch",
+        "CronDeliveryStatus",
+        "CronFailureAlert",
+        "CronFailureDestination",
+        "CronJob",
+        "CronJobCreate",
+        "CronJobPatch",
+        "CronJobState",
+        "CronMessageChannel",
+        "CronPayload",
+        "CronPayloadPatch",
+        "CronRunOutcome",
+        "CronRunStatus",
+        "CronRunTelemetry",
+        "CronSchedule",
+        "CronScriptPayload",
+        "CronSessionTarget",
+        "CronStoreFile",
+        "CronUsageSummary",
+        "CronWakeMode"
+      ],
+      "dependencies": [
+        "src/agents/pi-embedded-helpers.js",
+        "src/channels/plugins/types.js",
+        "src/config/types.cron.js",
+        "src/cron/types-shared.js"
+      ]
+    },
     "src/entry.ts": {
       "purpose": "CLI bootstrap — respawn logic, profile env, warning filter, runs CLI program",
       "exports": [],

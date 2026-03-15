@@ -36,6 +36,12 @@ export async function execCronScript(params: ExecCronScriptParams): Promise<Cron
   }
 
   const resolvedCwd = payload.cwd ? resolveScriptPath(payload.cwd, basePath) : basePath;
+  if (payload.cwd && !fs.existsSync(resolvedCwd)) {
+    return {
+      status: "error",
+      error: `script cwd not found: ${resolvedCwd} (cwd: ${payload.cwd})`,
+    };
+  }
   const childEnv = payload.env ? { ...process.env, ...payload.env } : process.env;
 
   return new Promise<CronRunOutcome>((resolve) => {

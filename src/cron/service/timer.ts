@@ -1209,7 +1209,11 @@ export async function executeJobCore(
           text: scriptResult.summary,
         });
         return { ...scriptResult, ...deliveryResult };
-      } catch {
+      } catch (err) {
+        state.deps.log.warn(
+          { jobId: job.id, err: String(err) },
+          "cron: script output delivery failed",
+        );
         return { ...scriptResult, delivered: false, deliveryAttempted: true };
       }
     }

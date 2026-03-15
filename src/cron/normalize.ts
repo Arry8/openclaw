@@ -98,6 +98,10 @@ function coercePayload(payload: UnknownRecord) {
       const trimmed = next.command.trim();
       if (trimmed) {
         next.command = trimmed;
+      } else {
+        // Whitespace-only command is invalid — remove it so downstream validation
+        // sees it as missing rather than silently accepting an empty string.
+        delete next.command;
       }
     }
     if (typeof next.cwd === "string") {

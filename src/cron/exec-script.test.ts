@@ -103,8 +103,8 @@ describe("execCronScript", () => {
       basePath: tmpDir,
       abortSignal: controller.signal,
     });
-    // Abort after a short delay to let the process start.
-    setTimeout(() => controller.abort(), 50);
+    // Abort after a delay long enough for the process to start reliably on slow CI.
+    setTimeout(() => controller.abort(), 500);
     const result = await resultPromise;
     expect(result.status).toBe("error");
     expect(result.error).toContain("aborted");
