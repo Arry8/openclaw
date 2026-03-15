@@ -302,6 +302,36 @@ export function buildGatewayCronService(params: {
         lane: "cron",
       });
     },
+    announceScriptOutput: async ({ job, text }) => {
+      const delivery = job.delivery;
+      if (!delivery || delivery.mode !== "announce") {
+        return { delivered: false, deliveryAttempted: false };
+      }
+      const { agentId, cfg: runtimeConfig } = resolveCronAgent(job.agentId);
+      const channel = delivery.channel ?? "last";
+      const target = await resolveDeliveryTarget(runtimeConfig, agentId, {
+        channel,
+        to: delivery.to,
+        accountId: delivery.accountId,
+      });
+      if (!target.ok) {
+        cronLogger.warn(
+          { jobId: job.id, err: String(target.error) },
+          "cron: script delivery target resolution failed",
+        );
+        return { delivered: false, deliveryAttempted: true };
+      }
+      await deliverOutboundPayloads({
+        cfg: runtimeConfig,
+        channel: target.channel,
+        to: target.to,
+        accountId: target.accountId,
+        threadId: target.threadId,
+        payloads: [{ text }],
+        deps: createOutboundSendDeps(params.deps),
+      });
+      return { delivered: true, deliveryAttempted: true };
+    },
     sendCronFailureAlert: async ({ job, text, channel, to, mode, accountId }) => {
       const { agentId, cfg: runtimeConfig } = resolveCronAgent(job.agentId);
       const webhookToken = trimToOptionalString(params.cfg.cron?.webhookToken);
