@@ -116,12 +116,20 @@ export async function loadHookModule(scriptPath: string, basePath?: string): Pro
  * are admin-controlled and not subject to this restriction.
  */
 export function isValidJobHookPath(scriptPath: string): boolean {
-  // Reject absolute paths and traversal segments in per-job entries.
+  // Reject empty, absolute, URL-scheme, and traversal-based paths in per-job entries.
+  if (!scriptPath.trim()) {
+    return false;
+  }
+  // Reject URI-scheme specifiers (data:, http:, file:, etc.) — loadHookModule can import
+  // them directly, which would bypass the local-file restriction for per-job hooks.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(scriptPath)) {
+    return false;
+  }
   if (path.isAbsolute(scriptPath)) {
     return false;
   }
   const normalized = path.normalize(scriptPath);
-  if (normalized.startsWith("..")) {
+  if (normalized === ".." || normalized.startsWith(`..${path.sep}`)) {
     return false;
   }
   return true;

@@ -164,6 +164,7 @@
       ],
       "dependencies": [
         "src/config/types.cron.js",
+        "src/config/types.hooks.js",
         "src/cron/service/state.js",
         "src/cron/types.js",
         "src/hooks/lifecycle.js"

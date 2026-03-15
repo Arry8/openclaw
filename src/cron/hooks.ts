@@ -1,5 +1,6 @@
 // Authored by: cc (Claude Code) | 2026-03-13
 import type { CronConfig, CronHookEntry, CronLifecycleHookPoint } from "../config/types.cron.js";
+import type { LifecycleHookRunResult } from "../config/types.hooks.js";
 import { isValidJobHookPath, loadHookModule, runLifecycleHooks } from "../hooks/lifecycle.js";
 import type { Logger } from "./service/state.js";
 import type { CronJob } from "./types.js";
@@ -23,11 +24,8 @@ export type CronHookContext = {
   basePath?: string;
 };
 
-// Back-compat alias: CronHookRunResult is the same shape as LifecycleHookRunResult.
-export type CronHookRunResult = {
-  aborted: boolean;
-  reason?: string;
-};
+// Back-compat alias: keeps existing callers working without re-exporting the shared type directly.
+export type CronHookRunResult = LifecycleHookRunResult;
 
 /** Resolved entry with a guaranteed numeric priority for sorting. */
 type ResolvedEntry = CronHookEntry & { priority: number };
