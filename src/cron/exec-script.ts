@@ -24,6 +24,10 @@ export async function execCronScript(params: ExecCronScriptParams): Promise<Cron
     return { status: "error", error: "script execution aborted (timeout)" };
   }
 
+  if (!payload.command.trim()) {
+    return { status: "error", error: "script command is empty" };
+  }
+
   const resolvedCommand = resolveScriptPath(payload.command, basePath);
 
   // Validate file exists before spawning to give a clear error message.
@@ -125,9 +129,11 @@ function resolveScriptInterpreter(scriptPath: string): string | null {
   const ext = path.extname(scriptPath).toLowerCase();
   switch (ext) {
     case ".sh":
-    case ".bash":
-    case ".zsh":
       return "sh";
+    case ".bash":
+      return "bash";
+    case ".zsh":
+      return "zsh";
     case ".js":
     case ".cjs":
     case ".mjs":
