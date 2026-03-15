@@ -3,8 +3,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveUserPath } from "../utils.js";
-import type { CronRunOutcome } from "./types.js";
-import type { CronScriptPayload } from "./types.js";
+import type { CronRunOutcome, CronScriptPayload } from "./types.js";
 
 export type ExecCronScriptParams = {
   payload: CronScriptPayload;
@@ -134,8 +133,8 @@ function resolveScriptInterpreter(scriptPath: string): string | null {
     case ".mjs":
       return "node";
     case ".ts":
-      // Prefer bun for TypeScript; falls back to node+tsx if bun is unavailable,
-      // but we let the caller surface that as a spawn error rather than probing.
+      // Uses bun for TypeScript. If bun is not installed the spawn will fail
+      // with an error message. Users can ensure bun is available or use a shebang.
       return "bun";
     case ".py":
       return "python3";
