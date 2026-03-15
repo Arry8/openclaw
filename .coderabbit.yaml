@@ -50,6 +50,3 @@ knowledge_base:
   linear:
     team_keys: []
 
-tools:
-  web_search:
-    enabled: false
