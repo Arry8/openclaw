@@ -108,6 +108,24 @@ else
   fi
   VERIFIED="$(/usr/bin/plutil -extract ProgramArguments.1 raw -o - "${PLIST_PATH}")"
   log "Plist verified: ${VERIFIED}"
+
+  # Stamp OPENCLAW_VERSION with short commit so the dashboard shows e.g.
+  # "2026.3.14+9e08184" — makes stable vs dev builds distinguishable.
+  # Must use OPENCLAW_VERSION (not OPENCLAW_SERVICE_VERSION): resolveRuntimeServiceVersion
+  # checks OPENCLAW_VERSION first, then the compiled VERSION constant from package.json,
+  # so OPENCLAW_SERVICE_VERSION is never reached when the package.json version is non-empty.
+  SHORT_COMMIT="$(git -C "${REPO_DIR}" rev-parse --short HEAD)"
+  PKG_VERSION="$(python3 -c "import json; print(json.load(open('${REPO_DIR}/package.json'))['version'])")"
+  STAMPED_VERSION="${PKG_VERSION}+${SHORT_COMMIT}"
+  # Add or replace the OPENCLAW_VERSION key in EnvironmentVariables
+  if /usr/bin/plutil -extract 'EnvironmentVariables.OPENCLAW_VERSION' raw -o - "${PLIST_PATH}" &>/dev/null; then
+    /usr/bin/plutil -replace 'EnvironmentVariables.OPENCLAW_VERSION' -string "${STAMPED_VERSION}" "${PLIST_PATH}"
+  else
+    /usr/bin/plutil -insert 'EnvironmentVariables.OPENCLAW_VERSION' -string "${STAMPED_VERSION}" "${PLIST_PATH}"
+  fi
+  # Keep the Comment key in sync for at-a-glance plist inspection
+  /usr/bin/plutil -replace 'Comment' -string "OpenClaw Gateway (v${STAMPED_VERSION})" "${PLIST_PATH}"
+  log "Stamped build version: ${STAMPED_VERSION}"
 fi
 
 # ── 7. Restart gateway ────────────────────────────────────────────────────────
