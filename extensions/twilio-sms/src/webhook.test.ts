@@ -222,6 +222,45 @@ describe("handleSmsRequest — allowlist policy", () => {
   });
 });
 
+describe("handleSmsRequest — fromNumber enforcement", () => {
+  const cfgWithFromNumber = normalizeSmsConfig({
+    twilio: { accountSid: "AC123", authToken: AUTH_TOKEN },
+    publicUrl: PUBLIC_URL,
+    fromNumber: "+15550009999",
+    inboundPolicy: "open",
+    skipSignatureVerification: true,
+  });
+
+  it("accepts a message addressed to fromNumber", async () => {
+    const req = makeRequest({ body: buildBody(baseParams) });
+    const res = makeResponse();
+    const onMessage = vi.fn();
+    await handleSmsRequest(req, res, { config: cfgWithFromNumber, onMessage });
+    expect(res.statusCode).toBe(200);
+    expect(onMessage).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a message addressed to a different number", async () => {
+    const params = { ...baseParams, To: "+15551111111" };
+    const req = makeRequest({ body: buildBody(params) });
+    const res = makeResponse();
+    const onMessage = vi.fn();
+    await handleSmsRequest(req, res, { config: cfgWithFromNumber, onMessage });
+    expect(res.statusCode).toBe(403);
+    expect(onMessage).not.toHaveBeenCalled();
+  });
+
+  it("skips check when fromNumber is not configured", async () => {
+    const params = { ...baseParams, To: "+15551111111" };
+    const req = makeRequest({ body: buildBody(params) });
+    const res = makeResponse();
+    const onMessage = vi.fn();
+    await handleSmsRequest(req, res, { config: baseConfig, onMessage });
+    expect(res.statusCode).toBe(200);
+    expect(onMessage).toHaveBeenCalledOnce();
+  });
+});
+
 describe("handleSmsRequest — successful dispatch", () => {
   it("passes correct message fields to onMessage", async () => {
     const req = makeRequest({ body: buildBody(baseParams) });

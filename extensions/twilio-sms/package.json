@@ -7,6 +7,9 @@
     "@sinclair/typebox": "0.34.48",
     "zod": "^4.3.6"
   },
+  "peerDependencies": {
+    "openclaw": "*"
+  },
   "openclaw": {
     "extensions": [
       "./index.ts"

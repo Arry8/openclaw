@@ -75,6 +75,12 @@ export async function createSmsRuntime(
   coreConfig: OpenClawConfig,
   logger: RuntimeLogger,
 ): Promise<SmsRuntime> {
+  if (!config.skipSignatureVerification && (!config.publicUrl || !config.twilio?.authToken)) {
+    throw new Error(
+      "twilio-sms requires publicUrl and twilio.authToken when signature verification is enabled",
+    );
+  }
+
   const inbox: SmsMessage[] = [];
 
   const onMessage = (msg: SmsMessage): void => {

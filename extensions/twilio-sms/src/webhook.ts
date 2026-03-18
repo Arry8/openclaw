@@ -110,6 +110,14 @@ export async function handleSmsRequest(
   }
 
   const from = params["From"] ?? "";
+  const to = params["To"] ?? "";
+
+  // Reject messages not addressed to the configured Twilio number.
+  if (config.fromNumber && normalizePhoneNumber(to) !== normalizePhoneNumber(config.fromNumber)) {
+    res.writeHead(403, { "Content-Type": "text/plain" });
+    res.end("Forbidden");
+    return;
+  }
 
   // Allowlist gate — applied after sig verify so spoofed numbers don't leak policy info.
   if (config.inboundPolicy === "allowlist") {
@@ -122,7 +130,7 @@ export async function handleSmsRequest(
 
   const msg: SmsMessage = {
     from,
-    to: params["To"] ?? "",
+    to,
     body: params["Body"] ?? "",
     messageSid: params["MessageSid"] ?? "",
     receivedAt: Date.now(),

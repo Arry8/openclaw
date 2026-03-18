@@ -1,7 +1,7 @@
 // Authored by: cc (Claude Code) | 2026-03-18
 import { Type } from "@sinclair/typebox";
 import type { GatewayRequestHandlerOptions, OpenClawPluginApi } from "openclaw/plugin-sdk/core";
-import { resolveSmsConfig, type SmsConfigInput } from "./src/config.js";
+import { SmsConfigSchema, resolveSmsConfig, type SmsConfigInput } from "./src/config.js";
 import { createSmsRuntime, type SmsRuntime } from "./src/runtime.js";
 
 const smsPlugin = {
@@ -11,7 +11,9 @@ const smsPlugin = {
     "Receive inbound SMS via Twilio and route messages to the OC agent (Phase 1: inbound only)",
 
   register(api: OpenClawPluginApi) {
-    const config = resolveSmsConfig((api.pluginConfig ?? {}) as SmsConfigInput);
+    const config = SmsConfigSchema.parse(
+      resolveSmsConfig((api.pluginConfig ?? {}) as SmsConfigInput),
+    );
     let runtime: SmsRuntime | null = null;
 
     api.registerService({
