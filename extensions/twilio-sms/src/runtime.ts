@@ -164,7 +164,11 @@ async function dispatchToAgent(
     { agentId },
   );
 
-  const modelRef = `${agentRuntime.defaults.provider}/${agentRuntime.defaults.model}`;
+  // Read model from config (agents.defaults.model.primary), fall back to SDK defaults.
+  const primaryModel = (cfg as { agents?: { defaults?: { model?: { primary?: string } } } }).agents
+    ?.defaults?.model?.primary;
+  const modelRef =
+    primaryModel || `${agentRuntime.defaults.provider}/${agentRuntime.defaults.model}`;
   const slashIndex = modelRef.indexOf("/");
   const provider =
     slashIndex === -1 ? agentRuntime.defaults.provider : modelRef.slice(0, slashIndex);
