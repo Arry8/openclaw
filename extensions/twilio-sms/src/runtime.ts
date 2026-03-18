@@ -1,13 +1,61 @@
 // Authored by: cc (Claude Code) | 2026-03-18
+import crypto from "node:crypto";
 import http from "node:http";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
+
+type ThinkLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "adaptive";
+type VerboseLevel = "off" | "on" | "full";
 import { normalizePhoneNumber } from "./allowlist.js";
 import type { SmsConfig } from "./config.js";
 import { handleSmsRequest, type SmsMessage } from "./webhook.js";
 
 const INBOX_MAX = 50;
 
-type SubagentDispatcher = {
-  run: (params: { sessionKey: string; message: string }) => Promise<unknown>;
+// Typed against OpenClawPluginApi["runtime"]["agent"] — passed in from index.ts.
+type AgentRuntime = {
+  defaults: { model: string; provider: string };
+  resolveAgentDir: (
+    cfg: OpenClawConfig,
+    agentId: string,
+    env?: Record<string, string | undefined>,
+  ) => string;
+  resolveAgentWorkspaceDir: (cfg: OpenClawConfig, agentId: string) => string;
+  ensureAgentWorkspace: (params: { dir: string }) => Promise<unknown>;
+  resolveAgentIdentity: (cfg: OpenClawConfig, agentId: string) => { name?: string } | undefined;
+  resolveThinkingDefault: (params: {
+    cfg: OpenClawConfig;
+    provider: string;
+    model: string;
+  }) => ThinkLevel;
+  resolveAgentTimeoutMs: (params: { cfg: OpenClawConfig }) => number;
+  session: {
+    resolveStorePath: (store: string | undefined, params: { agentId: string }) => string;
+    loadSessionStore: (path: string) => Record<string, SessionEntry>;
+    saveSessionStore: (path: string, store: Record<string, SessionEntry>) => Promise<void>;
+    resolveSessionFilePath: (
+      sessionId: string,
+      entry?: { sessionFile?: string },
+      params?: { agentId: string },
+    ) => string;
+  };
+  runEmbeddedPiAgent: (params: {
+    sessionId: string;
+    sessionKey: string;
+    messageProvider: string;
+    sessionFile: string;
+    workspaceDir: string;
+    config: OpenClawConfig;
+    prompt: string;
+    provider: string;
+    model: string;
+    thinkLevel: ThinkLevel;
+    verboseLevel: VerboseLevel;
+    timeoutMs: number;
+    runId: string;
+    lane: string;
+    extraSystemPrompt: string;
+    agentDir: string;
+  }) => Promise<unknown>;
 };
 
 type RuntimeLogger = {
@@ -23,7 +71,8 @@ export type SmsRuntime = {
 
 export async function createSmsRuntime(
   config: SmsConfig,
-  subagent: SubagentDispatcher,
+  agentRuntime: AgentRuntime,
+  coreConfig: OpenClawConfig,
   logger: RuntimeLogger,
 ): Promise<SmsRuntime> {
   const inbox: SmsMessage[] = [];
@@ -35,16 +84,13 @@ export async function createSmsRuntime(
       inbox.shift();
     }
 
-    // Session key is stable per sender so conversation history accumulates correctly.
     const sessionKey = `sms:${normalizePhoneNumber(msg.from)}`;
-    const message = `SMS from ${msg.from}: ${msg.body}`;
-
     logger.info(`[twilio-sms] dispatching message to agent (session=${sessionKey})`);
 
-    // Fire-and-forget — the TwiML response is already sent; agent errors are logged only.
-    subagent
-      .run({ sessionKey, message })
-      .catch((err: unknown) => logger.error(`[twilio-sms] agent dispatch failed: ${String(err)}`));
+    // Fire-and-forget — TwiML response already sent; errors are logged only.
+    dispatchToAgent(msg, sessionKey, agentRuntime, coreConfig, logger).catch((err: unknown) =>
+      logger.error(`[twilio-sms] agent dispatch failed: ${String(err)}`),
+    );
   };
 
   const server = http.createServer((req, res) => {
@@ -82,4 +128,74 @@ export async function createSmsRuntime(
     // Return a snapshot so callers can't mutate the internal buffer.
     getInbox: () => [...inbox],
   };
+}
+
+type SessionEntry = { sessionId: string; updatedAt: number };
+
+async function dispatchToAgent(
+  msg: SmsMessage,
+  sessionKey: string,
+  agentRuntime: AgentRuntime,
+  cfg: OpenClawConfig,
+  logger: RuntimeLogger,
+): Promise<void> {
+  const agentId = "main";
+
+  const storePath = agentRuntime.session.resolveStorePath(
+    (cfg as { session?: { store?: string } }).session?.store,
+    { agentId },
+  );
+  const agentDir = agentRuntime.resolveAgentDir(cfg, agentId);
+  const workspaceDir = agentRuntime.resolveAgentWorkspaceDir(cfg, agentId);
+  await agentRuntime.ensureAgentWorkspace({ dir: workspaceDir });
+
+  const sessionStore = agentRuntime.session.loadSessionStore(storePath);
+  const now = Date.now();
+  let sessionEntry = sessionStore[sessionKey];
+  if (!sessionEntry) {
+    sessionEntry = { sessionId: crypto.randomUUID(), updatedAt: now };
+    sessionStore[sessionKey] = sessionEntry;
+    await agentRuntime.session.saveSessionStore(storePath, sessionStore);
+  }
+
+  const sessionFile = agentRuntime.session.resolveSessionFilePath(
+    sessionEntry.sessionId,
+    undefined,
+    { agentId },
+  );
+
+  const modelRef = `${agentRuntime.defaults.provider}/${agentRuntime.defaults.model}`;
+  const slashIndex = modelRef.indexOf("/");
+  const provider =
+    slashIndex === -1 ? agentRuntime.defaults.provider : modelRef.slice(0, slashIndex);
+  const model = slashIndex === -1 ? modelRef : modelRef.slice(slashIndex + 1);
+  const thinkLevel = agentRuntime.resolveThinkingDefault({ cfg, provider, model });
+
+  const identity = agentRuntime.resolveAgentIdentity(cfg, agentId);
+  const agentName = identity?.name?.trim() || "assistant";
+  const timeoutMs = agentRuntime.resolveAgentTimeoutMs({ cfg });
+  const runId = `sms:${sessionKey}:${Date.now()}`;
+
+  const extraSystemPrompt = `You are ${agentName}. You are receiving an SMS message. The sender's phone number is ${msg.from}. Respond helpfully and concisely.`;
+
+  await agentRuntime.runEmbeddedPiAgent({
+    sessionId: sessionEntry.sessionId,
+    sessionKey,
+    messageProvider: "sms",
+    sessionFile,
+    workspaceDir,
+    config: cfg,
+    prompt: `SMS from ${msg.from}: ${msg.body}`,
+    provider,
+    model,
+    thinkLevel,
+    verboseLevel: "off",
+    timeoutMs,
+    runId,
+    lane: "sms",
+    extraSystemPrompt,
+    agentDir,
+  });
+
+  logger.info(`[twilio-sms] agent run complete (session=${sessionKey})`);
 }

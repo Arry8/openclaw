@@ -71,7 +71,7 @@ function makeResponse(): ServerResponse & {
     writeHead: vi.fn(function (this: typeof res, code: number, hdrs?: Record<string, string>) {
       this.statusCode = code;
       this.headers = { ...this.headers, ...(hdrs ?? {}) };
-      this.headersSent = true;
+      (this as unknown as { headersSent: boolean }).headersSent = true;
     }),
     end: vi.fn(function (this: typeof res, body: string) {
       this.body = body;

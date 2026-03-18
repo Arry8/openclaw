@@ -17,7 +17,7 @@ const smsPlugin = {
     api.registerService({
       id: "twilio-sms",
       start: async () => {
-        runtime = await createSmsRuntime(config, api.runtime.subagent, api.logger);
+        runtime = await createSmsRuntime(config, api.runtime.agent, api.config, api.logger);
       },
       stop: async () => {
         await runtime?.stop();
@@ -35,7 +35,7 @@ const smsPlugin = {
       description:
         "View recent inbound SMS messages received at the configured Twilio number. Returns up to 50 messages.",
       parameters: Type.Object({}),
-      execute(_toolCallId: string) {
+      async execute(_toolCallId: string) {
         const messages = runtime?.getInbox() ?? [];
         return {
           content: [{ type: "text" as const, text: JSON.stringify(messages, null, 2) }],

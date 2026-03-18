@@ -86,7 +86,8 @@ export const SmsConfigSchema = z
   .strict();
 
 export type SmsConfig = z.infer<typeof SmsConfigSchema>;
-export type SmsConfigInput = Partial<SmsConfig>;
+// z.input gives the pre-default input shape: serve fields are all optional.
+export type SmsConfigInput = z.input<typeof SmsConfigSchema>;
 
 // -----------------------------------------------------------------------------
 // Config Resolution (merge env vars into missing credential fields)
