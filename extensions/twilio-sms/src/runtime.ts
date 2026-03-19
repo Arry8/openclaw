@@ -14,6 +14,7 @@ type SubagentRuntime = {
     extraSystemPrompt?: string;
     lane?: string;
     deliver?: boolean;
+    idempotencyKey?: string;
   }) => Promise<{ runId: string }>;
 };
 
@@ -62,6 +63,7 @@ export async function createSmsRuntime(
           "Respond helpfully and concisely.",
         lane: "sms",
         deliver: false,
+        idempotencyKey: `sms:${msg.messageSid}`,
       })
       .then(({ runId }) => {
         logger.info(`[twilio-sms] agent run dispatched (session=${sessionKey}, runId=${runId})`);
