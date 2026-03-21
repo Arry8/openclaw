@@ -1,4 +1,6 @@
+// Authored by: cc (Claude Code) | 2026-03-20
 import { Type } from "@sinclair/typebox";
+import { resolveSecretInputString } from "openclaw/plugin-sdk";
 import type {
   GatewayRequestHandlerOptions,
   OpenClawPluginApi,
@@ -9,6 +11,7 @@ import {
   resolveVoiceCallConfig,
   validateProviderConfig,
   type VoiceCallConfig,
+  type VoiceCallConfigInput,
 } from "./src/config.js";
 import type { CoreConfig } from "./src/core-bridge.js";
 import { createVoiceCallRuntime, type VoiceCallRuntime } from "./src/runtime.js";
@@ -148,8 +151,31 @@ const voiceCallPlugin = {
   name: "Voice Call",
   description: "Voice-call plugin with Telnyx/Twilio/Plivo providers",
   configSchema: voiceCallConfigSchema,
-  register(api: OpenClawPluginApi) {
-    const config = resolveVoiceCallConfig(voiceCallConfigSchema.parse(api.pluginConfig));
+  async register(api: OpenClawPluginApi) {
+    // Resolve Twilio credentials — may be plain strings or secret refs (e.g. AKV exec refs).
+    const rawPluginConfig = (api.pluginConfig ?? {}) as Record<string, unknown>;
+    const rawTwilio = rawPluginConfig.twilio as Record<string, unknown> | undefined;
+    let resolvedPluginConfig = rawPluginConfig;
+    if (rawTwilio) {
+      resolvedPluginConfig = {
+        ...rawPluginConfig,
+        twilio: {
+          accountSid: await resolveSecretInputString({
+            config: api.config,
+            value: rawTwilio.accountSid,
+            env: process.env,
+          }),
+          authToken: await resolveSecretInputString({
+            config: api.config,
+            value: rawTwilio.authToken,
+            env: process.env,
+          }),
+        },
+      };
+    }
+    const config = resolveVoiceCallConfig(
+      voiceCallConfigSchema.parse(resolvedPluginConfig) as VoiceCallConfigInput,
+    );
     const validation = validateProviderConfig(config);
 
     if (api.pluginConfig && typeof api.pluginConfig === "object") {

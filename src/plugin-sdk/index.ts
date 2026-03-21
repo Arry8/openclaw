@@ -310,6 +310,7 @@ export {
   normalizeSecretInputString,
 } from "../config/types.secrets.js";
 export type { SecretInput, SecretRef } from "../config/types.secrets.js";
+export { resolveSecretInputString } from "../secrets/resolve-secret-input-string.js";
 export { ToolPolicySchema } from "../config/zod-schema.agent-runtime.js";
 export type { RuntimeEnv } from "../runtime.js";
 export type { WizardPrompter } from "../wizard/prompts.js";

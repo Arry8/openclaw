@@ -1,5 +1,6 @@
-// Authored by: cc (Claude Code) | 2026-03-19
+// Authored by: cc (Claude Code) | 2026-03-20
 import { Type } from "@sinclair/typebox";
+import { resolveSecretInputString } from "openclaw/plugin-sdk";
 import type { GatewayRequestHandlerOptions, OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import { SmsConfigSchema, resolveSmsConfig, type SmsConfigInput } from "./src/config.js";
 import { createSmsRuntime, type SmsRuntime } from "./src/runtime.js";
@@ -10,10 +11,29 @@ const smsPlugin = {
   description:
     "Receive inbound SMS via Twilio and route messages to the OC agent (Phase 1: inbound only)",
 
-  register(api: OpenClawPluginApi) {
-    const config = SmsConfigSchema.parse(
-      resolveSmsConfig((api.pluginConfig ?? {}) as SmsConfigInput),
-    );
+  async register(api: OpenClawPluginApi) {
+    // Resolve Twilio credentials — may be plain strings or secret refs (e.g. AKV exec refs).
+    const rawPluginConfig = (api.pluginConfig ?? {}) as Record<string, unknown>;
+    const rawTwilio = rawPluginConfig.twilio as Record<string, unknown> | undefined;
+    let resolvedPluginConfig: SmsConfigInput = rawPluginConfig as SmsConfigInput;
+    if (rawTwilio) {
+      resolvedPluginConfig = {
+        ...rawPluginConfig,
+        twilio: {
+          accountSid: await resolveSecretInputString({
+            config: api.config,
+            value: rawTwilio.accountSid,
+            env: process.env,
+          }),
+          authToken: await resolveSecretInputString({
+            config: api.config,
+            value: rawTwilio.authToken,
+            env: process.env,
+          }),
+        },
+      } as SmsConfigInput;
+    }
+    const config = SmsConfigSchema.parse(resolveSmsConfig(resolvedPluginConfig));
     let runtime: SmsRuntime | null = null;
 
     api.registerService({
