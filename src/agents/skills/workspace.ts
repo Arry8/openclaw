@@ -16,6 +16,7 @@ import { shouldIncludeSkill } from "./config.js";
 import { normalizeSkillFilter } from "./filter.js";
 import {
   parseFrontmatter,
+  parseTriggersFromFrontmatter,
   resolveOpenClawMetadata,
   resolveSkillInvocationPolicy,
 } from "./frontmatter.js";
@@ -526,6 +527,40 @@ function loadSkillEntries(
   return skillEntries;
 }
 
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/**
+ * Compact skill catalog: name + location only (no description or content).
+ * Used for trigger-unmatched skills in dynamic loading mode — the model is
+ * aware of the skill and can read it on demand via the read tool.
+ */
+function formatSkillsCompact(skills: Skill[]): string {
+  const visible = skills.filter((s) => !s.disableModelInvocation);
+  if (visible.length === 0) return "";
+  const lines = [
+    "\n\nThe following skills provide specialized instructions for specific tasks.",
+    "Use the read tool to load a skill's file when the task matches its name.",
+    "When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md) and use that absolute path in tool commands.",
+    "",
+    "<available_skills>",
+  ];
+  for (const skill of visible) {
+    lines.push("  <skill>");
+    lines.push(`    <name>${escapeXml(skill.name)}</name>`);
+    lines.push(`    <location>${escapeXml(skill.filePath)}</location>`);
+    lines.push("  </skill>");
+  }
+  lines.push("</available_skills>");
+  return lines.join("\n");
+}
+
 function applySkillsPromptLimits(params: { skills: Skill[]; config?: OpenClawConfig }): {
   skillsForPrompt: Skill[];
   truncated: boolean;
@@ -576,6 +611,7 @@ export function buildWorkspaceSkillSnapshot(
       name: entry.skill.name,
       primaryEnv: entry.metadata?.primaryEnv,
       requiredEnv: entry.metadata?.requires?.env?.slice(),
+      triggers: parseTriggersFromFrontmatter(entry.frontmatter),
     })),
     ...(skillFilter === undefined ? {} : { skillFilter }),
     resolvedSkills,
@@ -637,16 +673,61 @@ function resolveWorkspaceSkillPromptState(
   return { eligible, prompt, resolvedSkills };
 }
 
+/**
+ * Partition resolved skills by trigger match for the current message.
+ * Trigger-matched skills (or skills with no triggers) get full content.
+ * Unmatched skills appear in compact format so the model can discover and read them.
+ */
+function buildTriggerPartitionedPrompt(snapshot: SkillSnapshot, messageText: string): string {
+  const lowerMsg = messageText.toLowerCase();
+  const triggerMap = new Map(snapshot.skills.map((s) => [s.name, s.triggers ?? []]));
+  const resolved = snapshot.resolvedSkills ?? [];
+
+  const matched: Skill[] = [];
+  const unmatched: Skill[] = [];
+  for (const skill of resolved) {
+    const triggers = triggerMap.get(skill.name) ?? [];
+    // Skills without triggers always inject fully (backward compatible)
+    if (triggers.length === 0 || triggers.some((t) => lowerMsg.includes(t.toLowerCase()))) {
+      matched.push(skill);
+    } else {
+      unmatched.push(skill);
+    }
+  }
+
+  const parts: string[] = [];
+  if (unmatched.length > 0) {
+    parts.push(formatSkillsCompact(compactSkillPaths(unmatched)));
+  }
+  if (matched.length > 0) {
+    parts.push(formatSkillsForPrompt(compactSkillPaths(matched)));
+  }
+  return parts.filter(Boolean).join("\n");
+}
+
 export function resolveSkillsPromptForRun(params: {
   skillsSnapshot?: SkillSnapshot;
   entries?: SkillEntry[];
   config?: OpenClawConfig;
   workspaceDir: string;
+  /** Current user message — enables per-message trigger filtering when dynamicLoading is on. */
+  messageText?: string;
 }): string {
-  const snapshotPrompt = params.skillsSnapshot?.prompt?.trim();
+  const snapshot = params.skillsSnapshot;
+  const snapshotPrompt = snapshot?.prompt?.trim();
+
   if (snapshotPrompt) {
+    // Apply trigger-based partitioning when opt-in flag is set and we have message context
+    if (
+      params.config?.skills?.dynamicLoading?.enabled === true &&
+      params.messageText &&
+      snapshot?.resolvedSkills?.length
+    ) {
+      return buildTriggerPartitionedPrompt(snapshot, params.messageText);
+    }
     return snapshotPrompt;
   }
+
   if (params.entries && params.entries.length > 0) {
     const prompt = buildWorkspaceSkillsPrompt(params.workspaceDir, {
       entries: params.entries,
