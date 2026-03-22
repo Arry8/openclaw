@@ -131,8 +131,20 @@ if [[ "${SKIP_RESTART}" != "1" ]]; then
   sleep 3
   launchctl bootstrap "gui/$(id -u)" "${PLIST_PATH}"
   sleep 5
-  log "Gateway restarted. Checking status..."
-  node "${DIST_DEST}/index.js" gateway status || log "WARNING: gateway status check failed — check ${HOME}/.openclaw/logs/gateway.log"
+  log "Gateway restarted. Waiting for RPC probe..."
+  GATEWAY_OK=0
+  for i in 1 2 3 4 5; do
+    sleep 3
+    if node "${DIST_DEST}/index.js" gateway status 2>&1 | grep -q "RPC probe: ok"; then
+      log "Gateway RPC probe: ok (attempt ${i})"
+      GATEWAY_OK=1
+      break
+    fi
+    log "RPC probe not ready yet (attempt ${i}/5)..."
+  done
+  if [[ "${GATEWAY_OK}" != "1" ]]; then
+    log "WARNING: gateway RPC probe did not succeed after 5 attempts — check ${HOME}/.openclaw/logs/gateway.log"
+  fi
 else
   log "Skipping gateway restart (OPENCLAW_DEPLOY_SKIP_RESTART=1)"
 fi
