@@ -674,11 +674,28 @@ function resolveWorkspaceSkillPromptState(
 }
 
 /**
+ * Extract any non-skill preamble (remoteNote, truncation warning) from the pre-built
+ * snapshot prompt so it can be re-prepended in the dynamic partitioning path.
+ * The skills block always begins with the marker below; anything before it is preamble.
+ */
+const SKILLS_BLOCK_MARKER = "\n\nThe following skills";
+function extractSnapshotPreamble(snapshotPrompt: string): string {
+  const idx = snapshotPrompt.indexOf(SKILLS_BLOCK_MARKER);
+  return idx > 0 ? snapshotPrompt.slice(0, idx).trim() : "";
+}
+
+/**
  * Partition resolved skills by trigger match for the current message.
  * Trigger-matched skills (or skills with no triggers) get full content.
  * Unmatched skills appear in compact format so the model can discover and read them.
+ * Budget limits are applied to the matched set so combined output stays within config caps.
  */
-function buildTriggerPartitionedPrompt(snapshot: SkillSnapshot, messageText: string): string {
+function buildTriggerPartitionedPrompt(
+  snapshot: SkillSnapshot,
+  messageText: string,
+  snapshotPrompt: string,
+  config?: OpenClawConfig,
+): string {
   const lowerMsg = messageText.toLowerCase();
   const triggerMap = new Map(snapshot.skills.map((s) => [s.name, s.triggers ?? []]));
   const resolved = snapshot.resolvedSkills ?? [];
@@ -695,13 +712,23 @@ function buildTriggerPartitionedPrompt(snapshot: SkillSnapshot, messageText: str
     }
   }
 
+  // Apply budget limits to the matched (full-content) set — compact listing is always small.
+  const { skillsForPrompt: matchedForPrompt, truncated } = applySkillsPromptLimits({
+    skills: compactSkillPaths(matched),
+    config,
+  });
+  const truncationNote = truncated
+    ? `⚠️ Skills truncated: included ${matchedForPrompt.length} of ${matched.length}. Run \`openclaw skills check\` to audit.`
+    : "";
+
+  // Preserve any preamble (remoteNote, prior truncation warning) from the snapshot.
+  const preamble = extractSnapshotPreamble(snapshotPrompt);
+
   const parts: string[] = [];
-  if (unmatched.length > 0) {
-    parts.push(formatSkillsCompact(compactSkillPaths(unmatched)));
-  }
-  if (matched.length > 0) {
-    parts.push(formatSkillsForPrompt(compactSkillPaths(matched)));
-  }
+  if (preamble) parts.push(preamble);
+  if (unmatched.length > 0) parts.push(formatSkillsCompact(compactSkillPaths(unmatched)));
+  if (truncationNote) parts.push(truncationNote);
+  if (matchedForPrompt.length > 0) parts.push(formatSkillsForPrompt(matchedForPrompt));
   return parts.filter(Boolean).join("\n");
 }
 
@@ -723,7 +750,12 @@ export function resolveSkillsPromptForRun(params: {
       params.messageText &&
       snapshot?.resolvedSkills?.length
     ) {
-      return buildTriggerPartitionedPrompt(snapshot, params.messageText);
+      return buildTriggerPartitionedPrompt(
+        snapshot,
+        params.messageText,
+        snapshotPrompt,
+        params.config,
+      );
     }
     return snapshotPrompt;
   }
