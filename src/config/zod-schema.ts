@@ -892,6 +892,12 @@ export const OpenClawSchema = z
           .strict()
           .optional(),
         entries: z.record(z.string(), SkillEntrySchema).optional(),
+        dynamicLoading: z
+          .object({
+            enabled: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
