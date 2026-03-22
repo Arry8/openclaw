@@ -80,7 +80,11 @@ function filterSkillEntries(
     skillsLogger.debug(`Applying skill filter: ${label}`);
     filtered =
       normalized.length > 0
-        ? filtered.filter((entry) => normalized.includes(entry.skill.name))
+        ? filtered.filter(
+            (entry) =>
+              normalized.includes(entry.skill.name) ||
+              normalized.includes(path.basename(entry.skill.baseDir)),
+          )
         : [];
     skillsLogger.debug(
       `After skill filter: ${filtered.map((entry) => entry.skill.name).join(", ") || "(none)"}`,
@@ -711,6 +715,9 @@ function buildTriggerPartitionedPrompt(
       unmatched.push(skill);
     }
   }
+  skillsLogger.debug(
+    `Trigger partition: msg="${messageText.slice(0, 80)}" matched=[${matched.map((s) => s.name).join(", ")}] unmatched=[${unmatched.map((s) => s.name).join(", ")}]`,
+  );
 
   // Apply budget limits to the matched (full-content) set — compact listing is always small.
   const { skillsForPrompt: matchedForPrompt, truncated } = applySkillsPromptLimits({
