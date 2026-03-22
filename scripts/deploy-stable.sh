@@ -132,7 +132,7 @@ if [[ "${SKIP_RESTART}" != "1" ]]; then
   launchctl bootstrap "gui/$(id -u)" "${PLIST_PATH}"
   sleep 5
   log "Gateway restarted. Checking status..."
-  openclaw gateway status --deep || log "WARNING: gateway status check failed — check ${HOME}/.openclaw/logs/gateway.log"
+  node "${DIST_DEST}/index.js" gateway status || log "WARNING: gateway status check failed — check ${HOME}/.openclaw/logs/gateway.log"
 else
   log "Skipping gateway restart (OPENCLAW_DEPLOY_SKIP_RESTART=1)"
 fi
@@ -146,11 +146,11 @@ log "Watchdog agents resumed"
 BUILD_INFO_PATH="${DIST_DEST}/build-info.json"
 if [[ -f "${BUILD_INFO_PATH}" ]]; then
   DEPLOYED_COMMIT="$(python3 -c "import json; print(json.load(open('${BUILD_INFO_PATH}')).get('commit',''))")"
-  STABLE_HEAD="$(git -C "${STABLE_DIR}" rev-parse HEAD 2>/dev/null || echo "unknown")"
-  if [[ "${DEPLOYED_COMMIT}" == "${STABLE_HEAD}" ]]; then
-    log "Commit verified: dist matches stable HEAD (${DEPLOYED_COMMIT:0:10})"
+  DEV_HEAD="$(git -C "${REPO_DIR}" rev-parse HEAD 2>/dev/null || echo "unknown")"
+  if [[ "${DEPLOYED_COMMIT}" == "${DEV_HEAD}" ]]; then
+    log "Commit verified: dist matches dev HEAD (${DEPLOYED_COMMIT:0:10})"
   else
-    log "WARNING: dist commit (${DEPLOYED_COMMIT:0:10}) != stable HEAD (${STABLE_HEAD:0:10}) — dist may be stale"
+    log "WARNING: dist commit (${DEPLOYED_COMMIT:0:10}) != dev HEAD (${DEV_HEAD:0:10}) — dist may be stale"
   fi
 else
   log "WARNING: build-info.json missing — cannot verify deployed commit"
