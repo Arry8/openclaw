@@ -28,6 +28,7 @@ import {
   type ResolvedGatewayAuth,
 } from "./auth.js";
 import { normalizeCanvasScopedUrl } from "./canvas-capability.js";
+import { isControlUiIpAllowed } from "./control-ui-ip-filter.js";
 import {
   handleControlUiAvatarRequest,
   handleControlUiHttpRequest,
@@ -884,6 +885,23 @@ export function createGatewayHttpServer(opts: {
       );
 
       if (controlUiEnabled) {
+        // IP filter: loopback always allowed; lan/custom bind defaults to loopback-only
+        // unless controlUi.allowedNetworks is explicitly configured.
+        requestStages.push({
+          name: "control-ui-ip-guard",
+          run: () => {
+            const clientIp = resolveRequestClientIp(req, trustedProxies, allowRealIpFallback);
+            const allowedNetworks = configSnapshot.gateway?.controlUi?.allowedNetworks;
+            const bindMode = configSnapshot.gateway?.bind;
+            if (!isControlUiIpAllowed(clientIp, { allowedNetworks, bindMode })) {
+              res.statusCode = 403;
+              res.setHeader("Content-Type", "text/plain; charset=utf-8");
+              res.end("Forbidden");
+              return true;
+            }
+            return false;
+          },
+        });
         requestStages.push({
           name: "control-ui-avatar",
           run: () =>

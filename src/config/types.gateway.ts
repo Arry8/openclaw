@@ -106,6 +106,18 @@ export type GatewayControlUiConfig = {
   /** Allowed browser origins for Control UI/WebChat websocket connections. */
   allowedOrigins?: string[];
   /**
+   * CIDR allowlist for HTTP access to the Control UI (web chat).
+   * Loopback (127.0.0.1, ::1) is always permitted regardless of this list.
+   *
+   * When absent and `gateway.bind` is `lan` or `custom`, the Control UI
+   * defaults to loopback-only (secure default). Set `["0.0.0.0/0"]` to
+   * restore fully open access, or use your LAN subnet (e.g. "192.168.1.0/24").
+   *
+   * Has no effect when `gateway.bind` is `loopback` (default), `tailnet`, or
+   * `auto` — in those modes the bind address itself limits reachability.
+   */
+  allowedNetworks?: string[];
+  /**
    * DANGEROUS: Keep Host-header origin fallback behavior.
    * Supported long-term for deployments that intentionally rely on this policy.
    */
