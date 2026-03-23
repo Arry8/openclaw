@@ -65,6 +65,33 @@ describe("isControlUiIpAllowed", () => {
         isControlUiIpAllowed("203.0.113.1", { allowedNetworks: ["0.0.0.0/0"], bindMode: "lan" }),
       ).toBe(true);
     });
+
+    it("allows exact IP match (no CIDR slash required)", () => {
+      expect(
+        isControlUiIpAllowed("192.168.1.205", {
+          allowedNetworks: ["192.168.1.205"],
+          bindMode: "lan",
+        }),
+      ).toBe(true);
+    });
+
+    it("denies different ip when entry is an exact IP", () => {
+      expect(
+        isControlUiIpAllowed("192.168.1.206", {
+          allowedNetworks: ["192.168.1.205"],
+          bindMode: "lan",
+        }),
+      ).toBe(false);
+    });
+
+    it("allows ip matching mix of exact IPs and CIDRs", () => {
+      expect(
+        isControlUiIpAllowed("10.0.0.5", {
+          allowedNetworks: ["192.168.1.205", "10.0.0.0/8"],
+          bindMode: "lan",
+        }),
+      ).toBe(true);
+    });
   });
 
   // Rule 3 — secure default for lan/custom bind with no allowedNetworks
