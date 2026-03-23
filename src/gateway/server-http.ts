@@ -55,7 +55,7 @@ import {
 } from "./hooks.js";
 import { sendGatewayAuthFailure, setDefaultSecurityHeaders } from "./http-common.js";
 import { getBearerToken } from "./http-utils.js";
-import { resolveRequestClientIp } from "./net.js";
+import { isLoopbackAddress, resolveRequestClientIp } from "./net.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import { DEDUPE_MAX, DEDUPE_TTL_MS } from "./server-constants.js";
@@ -890,7 +890,13 @@ export function createGatewayHttpServer(opts: {
         requestStages.push({
           name: "control-ui-ip-guard",
           run: () => {
-            const clientIp = resolveRequestClientIp(req, trustedProxies, allowRealIpFallback);
+            // When trustedProxies includes loopback and the request is a direct local
+            // connection (no x-forwarded-for), resolveRequestClientIp returns undefined.
+            // Fall back to the raw socket address so loopback-always-allowed (Rule 1) fires.
+            const rawSocketAddr = req.socket?.remoteAddress;
+            const clientIp =
+              resolveRequestClientIp(req, trustedProxies, allowRealIpFallback) ??
+              (isLoopbackAddress(rawSocketAddr) ? rawSocketAddr : undefined);
             const allowedNetworks = configSnapshot.gateway?.controlUi?.allowedNetworks;
             const bindMode = configSnapshot.gateway?.bind;
             if (!isControlUiIpAllowed(clientIp, { allowedNetworks, bindMode })) {
